@@ -4,9 +4,9 @@
 #include <stdint.h>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#include "header/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "header/stb_image_write.h"
 
 extern void fast_convolution(uint8_t *in, uint8_t *out, int w, int h, float* kernel);
 
@@ -30,7 +30,7 @@ void convoloution_c(uint8_t* input, uint8_t* output, int w, int h, float* kernel
 
 int main() {
     int width, height, channels;
-    uint8_t* input_image = stbi_load("input_image.png", &width, &height, &channels, 3); 
+    uint8_t* input_image = stbi_load("images/input_image.png", &width, &height, &channels, 3); 
     if (!input_image) {
         printf("Error: image loading failed!");
         return 1;
@@ -52,38 +52,68 @@ int main() {
         -1.0f,  8.0f, -1.0f,
         -1.0f, -1.0f, -1.0f
     }; //edge detection
-    int iterations = 1;
+    
+    FILE* fp = fopen("plot/benchmark_results.csv", "w");
+    fprintf(fp, "iterations,c_time,asm_time,speedup\n");
+    printf("Running benchmarks...\n");
+    printf("Image size: %dx%d pixels\n\n", width, height);
 
-    clock_t start = clock();
-    for (int i = 0; i < iterations; i++) {
-        convoloution_c(r_in, r_out, width, height, kernel);
-        convoloution_c(g_in, g_out, width, height, kernel);
-        convoloution_c(b_in, b_out, width, height, kernel);
+    int test_iterations[] = {1, 5, 10, 20, 50, 100};
+    int num_tests = sizeof(test_iterations) / sizeof(test_iterations[0]);
+
+    for (int i = 0; i < num_tests; i++) {
+        int iterations = test_iterations[i];
+        clock_t start = clock();
+        for (int j = 0; j < iterations; j++) {
+            convoloution_c(r_in, r_out, width, height, kernel);
+            convoloution_c(g_in, g_out, width, height, kernel);
+            convoloution_c(b_in, b_out, width, height, kernel);
+        }
+        double time_c = (double)(clock() - start) / CLOCKS_PER_SEC;
+    
+        start = clock();
+        for (int i = 0; i < iterations; i++) {
+            fast_convolution(r_in, r_out, width, height, kernel);
+            fast_convolution(g_in, g_out, width, height, kernel);
+            fast_convolution(b_in, b_out, width, height, kernel);
+        }
+        double time_asm = (double)(clock() - start) / CLOCKS_PER_SEC;
+        double speedup = time_c / time_asm;
+
+        printf("Iterations: %3d | C: %.4f sec | ASM: %.4f sec | Speedup: %.2fx\n", 
+                iterations, time_c, time_asm, speedup);
+            
+        fprintf(fp, "%d,%.6f,%.6f,%.4f\n", iterations, time_c, time_asm, speedup);
     }
-    double time_c = (double)(clock() - start) / CLOCKS_PER_SEC;
-    printf("C version: %f sec\n", time_c);
+
+    fclose(fp);
+    printf("\nGenerating output images...\n");
+    convoloution_c(r_in, r_out, width, height, kernel);
+    convoloution_c(g_in, g_out, width, height, kernel);
+    convoloution_c(b_in, b_out, width, height, kernel);
+
+
     for (int i = 0; i < size; i++) {
         final_output_c[i * 3 + 0] = r_out[i];
         final_output_c[i * 3 + 1] = g_out[i];
         final_output_c[i * 3 + 2] = b_out[i];
     }
-    stbi_write_jpg("output_c_color.jpg", width, height, 3, final_output_c, 90);
+    stbi_write_jpg("images/output_c_color.jpg", width, height, 3, final_output_c, 90);
 
-    start = clock();
-    for (int i = 0; i < iterations; i++) {
-       fast_convolution(r_in, r_out, width, height, kernel);
-        fast_convolution(g_in, g_out, width, height, kernel);
-        fast_convolution(b_in, b_out, width, height, kernel);
-    }
-    double time_asm = (double)(clock() - start) / CLOCKS_PER_SEC;
-    printf("Assembly Version: %f sec | Speedup: %fx\n", time_asm, time_c / time_asm);
+
+    fast_convolution(r_in, r_out, width, height, kernel);
+    fast_convolution(g_in, g_out, width, height, kernel);
+    fast_convolution(b_in, b_out, width, height, kernel);
+    
     for (int i = 0; i < size; i++) {
         final_output_asm[i * 3 + 0] = r_out[i];
         final_output_asm[i * 3 + 1] = g_out[i];
         final_output_asm[i * 3 + 2] = b_out[i];
     }
 
-    stbi_write_jpg("output_asm_color.jpg", width, height, 3, final_output_asm, 90);
+    stbi_write_jpg("images/output_asm_color.jpg", width, height, 3, final_output_asm, 90);
+    printf("Benchmark data saved to benchmark_results.csv\n");
+    printf("Output images saved.\n");
 
     stbi_image_free(input_image);
     free(r_in);
