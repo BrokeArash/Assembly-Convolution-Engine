@@ -65,16 +65,16 @@ x_loop_simd:
     imul r11, rdx
     add r11, r10 ;رجیستر آر11 پیکسل وسط بلاک 9 تایی است
 
-    mov r12, r11                ;Center row
+    ;مقدار وسط هر سه ردیف ماتریس را در یک رجیستر ذخیره میکنیم تا به هر 9 پیکسل دسترسی داشته باشیم
+    mov r12, r11 ;ردیف وسط
     mov r13, r11
-    sub r13, rdx                ;Top row (y-1)
+    sub r13, rdx ;ردیف بالا
     mov r14, r11
-    add r14, rdx                ;Bottom row (y+1)
+    add r14, rdx ;ردیف پایین
 
     xorps xmm13, xmm13 ;همه خانه های ثبات را ایکسور میکند ( تا صفر شوند)
 
-    ; --- ROW 1 (Top) ---
-    ; Load 4 bytes, extend to integers, convert to float
+    ;ردیف بالا
     pmovzxbd xmm9, [rdi + r13 - 1] ;تبدیل 4 بایت به 4 مقدار اینت
     cvtdq2ps xmm9, xmm9            ;تبدیل به فلوت
     mulps xmm9, xmm0               ;ضرب ماتریسی
@@ -90,7 +90,7 @@ x_loop_simd:
     mulps xmm9, xmm2
     addps xmm13, xmm9
 
-    ; --- ROW 2 (Center) ---
+    ;ردیف وسط
     pmovzxbd xmm9, [rdi + r12 - 1]
     cvtdq2ps xmm9, xmm9
     mulps xmm9, xmm3
@@ -106,7 +106,7 @@ x_loop_simd:
     mulps xmm9, xmm5
     addps xmm13, xmm9
 
-    ; --- ROW 3 (Bottom) ---
+    ;ردیف پایین
     pmovzxbd xmm9, [rdi + r14 - 1]
     cvtdq2ps xmm9, xmm9
     mulps xmm9, xmm6
@@ -122,25 +122,21 @@ x_loop_simd:
     mulps xmm9, xmm8
     addps xmm13, xmm9
 
-    ; --- CLAMP AND STORE ---
-    maxps xmm13, xmm14          ; max(0, sum)
-    minps xmm13, xmm15          ; min(255, sum)
+    maxps xmm13, xmm14 ;اگر مقدار نهایی بین 0 تا 255 نبود آن را به کف یا سقف میرساند
+    minps xmm13, xmm15
     
-    cvtps2dq xmm13, xmm13       ; Convert float back to int32 (4 ints)
+    cvtps2dq xmm13, xmm13 ;تبدیل فلوت به اینت32
     
-    ; Pack 4 ints -> 4 shorts -> 4 bytes
-    packusdw xmm13, xmm13       ; Pack dwords to words (0-65535)
-    packuswb xmm13, xmm13       ; Pack words to bytes (0-255)
     
-    ; Store the bottom 4 bytes
+    packusdw xmm13, xmm13
+    packuswb xmm13, xmm13 ;تبدیل به بایت
+    
+    ;سیو کردن در حافظه
     movd [rsi + r11], xmm13
 
-    add r10, 4                  ; x += 4
+    add r10, 4 ;4 پیکسل بعدی
     jmp x_loop_simd
 
-    ; ---------------------------------------------------------
-    ; 4. SCALAR CLEANUP (Standard x86 FPU/SSE scalar)
-    ; ---------------------------------------------------------
 x_loop_scalar:
     mov rax, rdx
     dec rax
@@ -151,21 +147,18 @@ x_loop_scalar:
     imul r11, rdx
     add r11, r10
 
-    ; Use xmm10 and xmm11 instead of xmm0 and xmm1 to preserve kernel values
     xorps xmm10, xmm10
     
-    ; Pointers
     mov r12, r11
-    sub r12, rdx                ; Top row
-    mov r13, r11                ; Center row
+    sub r12, rdx
+    mov r13, r11
     mov r14, r11
-    add r14, rdx                ; Bottom row
+    add r14, rdx
 
-    ; Get kernel pointer from stack
+    ;مقادیر کرنل
     mov r8, [rsp]
-
-    ; Helper macro for scalar math using xmm10, xmm11 instead of xmm0, xmm1
-    %macro CALC_SCALAR 2
+    ;ماکرو که ضرب ماتریسی را یک به یک انجام دهد
+    %macro CALC_SCALAR 2 
         movzx eax, byte [rdi + %1]
         cvtsi2ss xmm11, eax
         mulss xmm11, [r8 + %2]
@@ -185,13 +178,13 @@ x_loop_scalar:
     CALC_SCALAR r14 + 1, 32
 
     xorps xmm11, xmm11
-    maxss xmm10, xmm11          ; max(0, sum)
+    maxss xmm10, xmm11 ;کف 0
     mov eax, 255
     cvtsi2ss xmm11, eax
-    minss xmm10, xmm11          ; min(255, sum)
+    minss xmm10, xmm11 ;سقف 255
 
-    cvtss2si eax, xmm10
-    mov [rsi + r11], al
+    cvtss2si eax, xmm10 ;تبدیل به اینتجر
+    mov [rsi + r11], al ;سیو در حافظه در پیکسل وسط
 
     inc r10
     jmp x_loop_scalar
