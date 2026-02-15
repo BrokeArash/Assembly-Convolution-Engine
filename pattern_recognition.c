@@ -11,175 +11,153 @@
 
 extern void fast_convolution(uint8_t *in, uint8_t *out, int w, int h, float* kernel);
 
+typedef struct { //اطلاعات عکس
+    double v_density;
+    double h_density;
+    int label;
+    int id;
+} ImageSignature;
 
-long long calculate_energy(uint8_t* image, int size) {
-    long long total = 0;
+float K_VERT[9] = { -1, 0, 1,
+                    -2, 0, 2,
+                    -1, 0, 1 
+                };
+float K_HORI[9] = { -1, -2, -1,
+                     0,  0,  0, 
+                     1,  2,  1 
+                };
+
+void to_grayscale(uint8_t* src, uint8_t* dest, int size) {
     for (int i = 0; i < size; i++) {
-        total += image[i];
+        dest[i] = (uint8_t)(src[i*3]*0.299 + src[i*3+1]*0.587 + src[i*3+2]*0.114);
     }
-    return total;
 }
 
-int recognize_pattern(uint8_t* r, uint8_t* g, uint8_t* b, int w, int h, 
-                      float* k_vert, float* k_horiz, 
-                      uint8_t* buffer, int use_asm) {
-    
+ImageSignature extract_features(uint8_t* rgb_img, int w, int h) {
     int size = w * h;
-    long long energy_vert = 0;
-    long long energy_horiz = 0;
+    uint8_t* gray = malloc(size);
+    uint8_t* buffer = malloc(size);
+    
+    to_grayscale(rgb_img, gray, size); //تبدیل به حاکستری برای کانولوشن
 
-    fast_convolution(r, buffer, w, h, k_vert);
-    energy_vert = calculate_energy(buffer, size);
-    fast_convolution(r, buffer, w, h, k_horiz);
-    energy_horiz = calculate_energy(buffer, size);
+    fast_convolution(gray, buffer, w, h, K_VERT);
+    long long sum_v = 0;
+    for(int i=0; i<size; i++) sum_v += buffer[i];
 
-    // Decision Logic
-    if (energy_vert > energy_horiz) {
-        return 0; // Vertical
-    } else {
-        return 1; // Horizontal
-    }
+    fast_convolution(gray, buffer, w, h, K_HORI);
+    long long sum_h = 0;
+    for(int i=0; i<size; i++) sum_h += buffer[i];
+
+    free(gray);
+    free(buffer);
+
+    ImageSignature sig; //خروجی به عنوان استراکت
+    sig.v_density = (double)sum_v / size; 
+    sig.h_density = (double)sum_h / size;
+    return sig;
 }
+
 
 int main(int argc, char** argv) {
-    if (argc < 2) {
+    if (argc < 2) { //چک کردن عکس ورودی
         printf("Usage: %s <image_path>\n", argv[0]);
         return 1;
     }
 
-    char* input_filename = argv[1];
-    int w, h, c;
+    int DATASET_SIZE = 100; //تعداد عکس های دیتاست
+    ImageSignature database[DATASET_SIZE];
+    printf("1. Training System (Loading Dataset)...\n");
 
-    uint8_t* img = stbi_load(input_filename, &w, &h, &c, 3); // Force 3 channels (RGB)
-    if (!img) {
-        printf("Error loading image: %s\n", input_filename);
+    for (int i = 0; i < DATASET_SIZE; i++) { //لود کردن عکس ها در استراکت
+        char filename[64];
+        sprintf(filename, "dataset/test_%d.jpg", i);
+
+        int w, h, c;
+        uint8_t* img = stbi_load(filename, &w, &h, &c, 3);
+        
+        if (img) {
+
+            database[i] = extract_features(img, w, h);
+            database[i].id = i;
+            
+            database[i].label = (i % 2 == 0) ? 0 : 1; 
+
+            stbi_image_free(img);
+        } else {
+            database[i].v_density = -1; 
+            database[i].h_density = -1;
+            printf("   - picture %d can't br trained", i);
+        }
+        
+        if (i % 10 == 0) printf("   - Learned from %d images...\n", i);
+    }
+    printf("   - Training Complete.\n\n");
+
+    printf("2. analyzing Input Image: %s\n", argv[1]);
+    int w, h, c;
+    uint8_t* input_img = stbi_load(argv[1], &w, &h, &c, 3); //لود عکس ورودی
+    if (!input_img) {
+        printf("Error: Could not load input image.\n");
         return 1;
     }
-    printf("Loaded Image: %s (%dx%d)\n", input_filename, w, h);
 
-    int size = w * h;
-    uint8_t *gray_in = malloc(size);
-    
-    uint8_t *out_vert = malloc(size);
-    uint8_t *out_horiz = malloc(size);
-    uint8_t *final_rgb = malloc(size * 3);
-    for (int i = 0; i < size; i++) {
-        gray_in[i] = (uint8_t)(img[i*3]*0.299 + img[i*3+1]*0.587 + img[i*3+2]*0.114);
-    }
+    ImageSignature input_sig = extract_features(input_img, w, h);
+    printf("   - Input Signature: [V: %.2f, H: %.2f]\n", input_sig.v_density, input_sig.h_density);
 
-    float k_vertical[9] = {
-        -1, 0, 1,
-        -2, 0, 2,
-        -1, 0, 1
-    };
+    double min_distance = 999999999.0;
+    int closest_match_index = -1;
 
-    float k_horizontal[9] = {
-        -1, -2, -1,
-         0,  0,  0,
-         1,  2,  1
-    };
+    for (int i = 0; i < DATASET_SIZE; i++) { //تشخیص نزدیک ترین عکس
+        if (database[i].v_density < 0) continue;
 
-    fast_convolution(gray_in, out_vert, w, h, k_vertical);
-    long long energy_v = calculate_energy(out_vert, size);
-    fast_convolution(gray_in, out_horiz, w, h, k_horizontal);
-    long long energy_h = calculate_energy(out_horiz, size);
+        double diff_v = input_sig.v_density - database[i].v_density;
+        double diff_h = input_sig.h_density - database[i].h_density;
+        double dist = sqrt( pow(diff_v, 2) + pow(diff_h, 2) );
 
-    printf("\nAnalysis Results:\n");
-    printf("Vertical Energy:   %lld\n", energy_v);
-    printf("Horizontal Energy: %lld\n", energy_h);
-
-    uint8_t* winner_img;
-    char* detection_result;
-
-    if (energy_v > energy_h) {
-        detection_result = "VERTICAL";
-        winner_img = out_vert;
-    } else {
-        detection_result = "HORIZONTAL";
-        winner_img = out_horiz;
-    }
-
-    printf("--------------------------\n");
-    printf("DETECTED PATTERN: %s\n", detection_result);
-    printf("--------------------------\n");
-
-    char out_filename[100];
-    sprintf(out_filename, "images/output_%s_detected.jpg", detection_result);
-    for(int i=0; i<size; i++) {
-        if (strcmp(detection_result, "VERTICAL") == 0) {
-            final_rgb[i*3+0] = winner_img[i]; // R
-            final_rgb[i*3+1] = winner_img[i]; // G
-            final_rgb[i*3+2] = winner_img[i]; // B
-        } else {
-            final_rgb[i*3+0] = winner_img[i];
-            final_rgb[i*3+1] = winner_img[i];
-            final_rgb[i*3+2] = winner_img[i];
+        if (dist < min_distance) {
+            min_distance = dist;
+            closest_match_index = i;
         }
     }
 
-    stbi_write_jpg(out_filename, w, h, 3, final_rgb, 90);
-    printf("Saved visualization to: %s\n", out_filename);
+    int detected_type = database[closest_match_index].label;
+    char* type_str = (detected_type == 0) ? "VERTICAL" : "HORIZONTAL";
 
-    // Cleanup
-    stbi_image_free(img);
-    free(gray_in);
-    free(out_vert);
-    free(out_horiz);
+    printf("\n------------------------------------------------\n");
+    printf("MATCH FOUND!\n");
+    printf("Closest Dataset Image: test_%d.jpg\n", database[closest_match_index].id);
+    printf("Similarity Distance:   %.4f (Lower is better)\n", min_distance);
+    printf("DETECTED PATTERN:      %s\n", type_str);
+    printf("------------------------------------------------\n");
+
+    int size = w * h;
+    uint8_t *gray = malloc(size);
+    uint8_t *output_gray = malloc(size);
+    uint8_t *final_rgb = malloc(size * 3);
+
+    to_grayscale(input_img, gray, size); //تبدیل عکس خروجی
+
+    if (detected_type == 0) {
+        fast_convolution(gray, output_gray, w, h, K_VERT);
+    } else {
+        fast_convolution(gray, output_gray, w, h, K_HORI);
+    }
+
+    for (int i = 0; i < size; i++) {
+        final_rgb[i*3+0] = output_gray[i];
+        final_rgb[i*3+1] = output_gray[i];
+        final_rgb[i*3+2] = output_gray[i];
+    }
+
+    char out_filename[100];
+    sprintf(out_filename, "images/output_%s_matched.jpg", type_str);
+    stbi_write_jpg(out_filename, w, h, 3, final_rgb, 90);
+    printf("Output saved to: %s\n", out_filename);
+
+    stbi_image_free(input_img);
+    free(gray);
+    free(output_gray);
     free(final_rgb);
 
     return 0;
-
-    // int num_images = 47;
-    // int correct_asm = 0;
-
-    // double total_time_asm = 0;
-    // printf("Starting Pattern Recognition on %d images...\n", num_images);
-    // printf("--------------------------------------------------\n");
-
-    // for (int i = 0; i < num_images; i++) {
-    //     char filename[64];
-    //     sprintf(filename, "dataset/test_%d.jpg", i);
-    //     int w, h, c;
-    //     uint8_t* img = stbi_load(filename, &w, &h, &c, 3);
-    //     if (!img) continue;
-
-    //     int size = w * h;
-    //     uint8_t *r = malloc(size);
-    //     uint8_t *g = malloc(size);
-    //     uint8_t *b = malloc(size);
-    //     uint8_t *scratch_buffer = malloc(size);
-    
-    //     for (int p = 0; p < size; p++) {
-    //         r[p] = img[p * 3 + 0];
-    //         g[p] = img[p * 3 + 1];
-    //         b[p] = img[p * 3 + 2];
-    //     }
-    //     clock_t start = clock();
-    //     int pred_asm = recognize_pattern(r, g, b, w, h, k_vertical, k_horizontal, scratch_buffer, 1);
-    //     total_time_asm += (double)(clock() - start) / CLOCKS_PER_SEC;
-
-    //     int expected = (i % 2);
-    //     if (pred_asm == expected) correct_asm++;
-    //     stbi_image_free(img);
-    //     free(r); free(g); free(b); free(scratch_buffer);
-
-    //     if (i % 10 == 0) printf("Processed %d images...\n", i);
-    // }
-
-    // printf("--------------------------------------------------\n");
-    // printf("RESULTS:\n");
-    // printf("Total Images Processed: %d\n", num_images);
-    // printf("ASM Accuracy: %.2f%%\n", (float)correct_asm / num_images * 100.0f);
-    // printf("\n");
-    // printf("Total Time ASM: %.4f sec\n", total_time_asm);
-
-    // FILE* fp = fopen("plot/recognition_results.csv", "w");
-    // if (fp) {
-    //     fprintf(fp, "type,accuracy,time\n");
-    //     fprintf(fp, "ASM,%.2f,%.4f\n", (float)correct_asm / num_images * 100.0f, total_time_asm);
-    //     fclose(fp);
-    //     printf("Data saved to plot/recognition_results.csv\n");
-    // }
-
-    // return 0;
 }
