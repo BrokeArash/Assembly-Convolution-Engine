@@ -35,7 +35,17 @@ class PatternAnalyzer:
         import numpy as np
         
         # Load and convert to grayscale
-        img = Image.open(image_path).convert('L')
+        try:
+            img = Image.open(image_path).convert('L')
+        except Exception as e:
+            print(f"Error loading {image_path}: {e}")
+            print("Trying to load as different format...")
+            # Try loading with different methods
+            try:
+                img = Image.open(image_path).convert('RGB').convert('L')
+            except:
+                raise ValueError(f"Cannot load image: {image_path}")
+        
         img_array = np.array(img, dtype=np.float32)
         
         # Sobel filters
@@ -353,26 +363,56 @@ class PatternAnalyzer:
         ax5.legend(fontsize=9)
         
         # ============================================================
-        # Plot 6: Pattern Type Comparison
+        # Plot 6: Pattern Type Comparison (CLASSIFICATION DECISION)
         # ============================================================
         ax6 = plt.subplot(3, 4, 6)
         
         avg_dist_v = np.mean([r['distance'] for r in vertical_results])
         avg_dist_h = np.mean([r['distance'] for r in horizontal_results])
         
+        # Determine classification based on average distance
+        if avg_dist_v < avg_dist_h:
+            predicted_class = 'VERTICAL'
+            colors_bar = ['#2ecc71', '#95a5a6']  # Green for winner, gray for loser
+            winner_idx = 0
+        else:
+            predicted_class = 'HORIZONTAL'
+            colors_bar = ['#95a5a6', '#3498db']  # Gray for loser, blue for winner
+            winner_idx = 1
+        
         categories = ['Vertical\nPatterns', 'Horizontal\nPatterns']
         values = [avg_dist_v, avg_dist_h]
-        colors_bar = ['#2ecc71', '#3498db']
         
-        bars = ax6.bar(categories, values, color=colors_bar, alpha=0.8, edgecolor='black')
+        bars = ax6.bar(categories, values, color=colors_bar, alpha=0.8, edgecolor='black', linewidth=2)
+        
+        # Highlight the winner with thicker border
+        bars[winner_idx].set_edgecolor('red')
+        bars[winner_idx].set_linewidth(3)
+        
         ax6.set_ylabel('Average Distance', fontweight='bold')
-        ax6.set_title('Average Distance by Pattern Type', fontweight='bold', fontsize=12)
+        ax6.set_title(f'Classification Decision: {predicted_class}', 
+                     fontweight='bold', fontsize=12, color='red')
         ax6.grid(axis='y', alpha=0.3)
         
-        for bar, val in zip(bars, values):
+        # Add value labels with winner annotation
+        for i, (bar, val) in enumerate(zip(bars, values)):
             height = bar.get_height()
-            ax6.text(bar.get_x() + bar.get_width()/2., height,
-                    f'{val:.2f}', ha='center', va='bottom', fontweight='bold')
+            label = f'{val:.2f}'
+            if i == winner_idx:
+                label += '\n★ WINNER'
+                ax6.text(bar.get_x() + bar.get_width()/2., height,
+                        label, ha='center', va='bottom', fontweight='bold', 
+                        fontsize=10, color='red')
+            else:
+                ax6.text(bar.get_x() + bar.get_width()/2., height,
+                        label, ha='center', va='bottom', fontweight='bold')
+        
+        # Add margin information
+        margin = abs(avg_dist_v - avg_dist_h)
+        ax6.text(0.5, 0.95, f'Confidence Margin: {margin:.4f}', 
+                transform=ax6.transAxes, ha='center', va='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8),
+                fontweight='bold', fontsize=9)
         
         # ============================================================
         # Plot 7: Input Image
@@ -437,35 +477,63 @@ class PatternAnalyzer:
         ax12 = plt.subplot(3, 4, 12)
         ax12.axis('off')
         
+        # Calculate classification based on average distance
+        avg_dist_v = np.mean([r['distance'] for r in vertical_results])
+        avg_dist_h = np.mean([r['distance'] for r in horizontal_results])
+        
+        if avg_dist_v < avg_dist_h:
+            predicted_class = 'VERTICAL'
+            confidence_margin = avg_dist_h - avg_dist_v
+        else:
+            predicted_class = 'HORIZONTAL'
+            confidence_margin = avg_dist_v - avg_dist_h
+        
         summary_data = [
             ['Metric', 'Value'],
             ['─' * 30, '─' * 20],
-            ['Best Match', f'test_{self.results[0]["id"]}.jpg'],
-            ['Pattern Type', self.results[0]['label_str']],
-            ['Similarity', f'{self.results[0]["similarity_score"]:.2f}%'],
-            ['Distance', f'{self.results[0]["distance"]:.4f}'],
+            ['CLASSIFICATION', ''],
+            ['Predicted Pattern', predicted_class],
+            ['Confidence Margin', f'{confidence_margin:.4f}'],
             ['', ''],
-            ['Total Images', str(len(self.results))],
-            ['Avg Distance', f'{np.mean([r["distance"] for r in self.results]):.4f}'],
-            ['Std Deviation', f'{np.std([r["distance"] for r in self.results]):.4f}'],
+            ['AVERAGE DISTANCES', ''],
+            ['To Vertical Class', f'{avg_dist_v:.4f}'],
+            ['To Horizontal Class', f'{avg_dist_h:.4f}'],
+            ['', ''],
+            ['NEAREST NEIGHBOR', ''],
+            ['Best Match', f'test_{self.results[0]["id"]}.jpg'],
+            ['Distance', f'{self.results[0]["distance"]:.4f}'],
+            ['Pattern', self.results[0]['label_str']],
         ]
         
         table = ax12.table(cellText=summary_data, cellLoc='left', loc='center',
                           colWidths=[0.6, 0.4])
         table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 2.5)
+        table.set_fontsize(9)
+        table.scale(1, 2.2)
         
+        # Style header
         for i in range(2):
             table[(0, i)].set_facecolor('#34495e')
             table[(0, i)].set_text_props(weight='bold', color='white')
         
-        for i in range(2, len(summary_data)):
-            for j in range(2):
-                if i % 2 == 0:
-                    table[(i, j)].set_facecolor('#ecf0f1')
+        # Style section headers
+        for row_idx in [2, 6, 10]:  # Section header rows
+            table[(row_idx, 0)].set_facecolor('#e74c3c')
+            table[(row_idx, 0)].set_text_props(weight='bold', color='white')
+            table[(row_idx, 1)].set_facecolor('#e74c3c')
         
-        ax12.set_title('Summary Statistics', fontweight='bold', fontsize=12, pad=20)
+        # Alternate row colors
+        for i in range(2, len(summary_data)):
+            if i not in [2, 6, 10]:  # Skip section headers
+                for j in range(2):
+                    if i % 2 == 0:
+                        table[(i, j)].set_facecolor('#ecf0f1')
+        
+        # Highlight classification result
+        table[(3, 0)].set_text_props(weight='bold')
+        table[(3, 1)].set_text_props(weight='bold', color='red')
+        
+        ax12.set_title('Classification Summary', fontweight='bold', fontsize=12, pad=20)
         
         # Main title
         fig.suptitle('Pattern Recognition Analysis Dashboard', 
@@ -474,7 +542,7 @@ class PatternAnalyzer:
         plt.tight_layout(rect=[0, 0, 1, 0.99])
         
         # Save
-        output_file = 'pattern_analysis_dashboard.png'
+        output_file = 'plot/pattern_analysis_dashboard.png'
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         print(f"\n✓ Visualization saved to {output_file}")
         
@@ -524,17 +592,11 @@ def main():
     # Calculate similarities
     results = analyzer.calculate_similarity_scores(input_path, database)
     
-    
     # Create visualizations
     print("\n" + "=" * 80)
     print("CREATING VISUALIZATIONS")
     print("=" * 80)
     analyzer.visualize_results(input_path)
-    
-    
-
-    
-    print("\n✓ Results saved to pattern_analysis_results.json")
     
     print("\n" + "=" * 80)
     print("ANALYSIS COMPLETE!")

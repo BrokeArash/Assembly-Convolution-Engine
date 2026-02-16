@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
     int DATASET_SIZE = 100; //تعداد عکس های دیتاست
     ImageSignature database[DATASET_SIZE];
     printf("1. Training System (Loading Dataset)...\n");
-
+    int loaded_count = 0;
     for (int i = 0; i < DATASET_SIZE; i++) { //لود کردن عکس ها در استراکت
         char filename[64];
         sprintf(filename, "dataset/test_%d.jpg", i);
@@ -79,14 +79,13 @@ int main(int argc, char** argv) {
 
             database[i] = extract_features(img, w, h);
             database[i].id = i;
-            
             database[i].label = (i % 2 == 0) ? 0 : 1; 
-
             stbi_image_free(img);
-        } else {
+            loaded_count++;
+        } else { 
             database[i].v_density = -1; 
             database[i].h_density = -1;
-            printf("   - picture %d can't be trained", i);
+            printf("   - picture %d can't be trained\n", i);
         }
         
         if (i % 10 == 0) printf("   - Learned from %d images...\n", i);
@@ -101,11 +100,16 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    ImageSignature input_sig = extract_features(input_img, w, h);
+    ImageSignature input_sig = extract_features(input_img, w, h); //تحلیل و تجزیه عکس ورودی
     printf("   - Input Signature: [V: %.2f, H: %.2f]\n", input_sig.v_density, input_sig.h_density);
 
     double min_distance = 999999999.0;
     int closest_match_index = -1;
+
+    double sum_dist_vertical = 0.0;
+    double sum_dist_horizontal = 0.0;
+    int count_vertical = 0;
+    int count_horizontal = 0;
 
     for (int i = 0; i < DATASET_SIZE; i++) { //تشخیص نزدیک ترین عکس
         if (database[i].v_density < 0) continue;
@@ -118,9 +122,25 @@ int main(int argc, char** argv) {
             min_distance = dist;
             closest_match_index = i;
         }
+
+        if (database[i].label == 0) { //میانگین فاصله از دسته عمودی و افقی
+            sum_dist_vertical += dist; 
+            count_vertical++;
+        } else {
+            sum_dist_horizontal += dist;
+            count_horizontal++;
+        }
     }
 
-    int detected_type = database[closest_match_index].label;
+    double avg_dist_vertical = sum_dist_vertical / count_vertical;
+    double avg_dist_horizontal = sum_dist_horizontal / count_horizontal;
+
+    int detected_type;
+    if (avg_dist_vertical < avg_dist_horizontal)
+        detected_type = 0;
+    else
+        detected_type = 1;
+
     char* type_str = (detected_type == 0) ? "VERTICAL" : "HORIZONTAL";
 
     printf("\n------------------------------------------------\n");
@@ -133,7 +153,6 @@ int main(int argc, char** argv) {
     int size = w * h;
     uint8_t *gray = malloc(size);
     uint8_t *output_gray = malloc(size);
-    uint8_t *final_rgb = malloc(size * 3);
 
     to_grayscale(input_img, gray, size); //تبدیل عکس خروجی
 
@@ -143,21 +162,15 @@ int main(int argc, char** argv) {
         fast_convolution(gray, output_gray, w, h, K_HORI);
     }
 
-    for (int i = 0; i < size; i++) {
-        final_rgb[i*3+0] = output_gray[i];
-        final_rgb[i*3+1] = output_gray[i];
-        final_rgb[i*3+2] = output_gray[i];
-    }
-
     char out_filename[100];
     sprintf(out_filename, "images/output_%s_matched.jpg", type_str);
-    stbi_write_jpg(out_filename, w, h, 3, final_rgb, 90);
+    stbi_write_jpg(out_filename, w, h, 3, output_gray, 90);
     printf("Output saved to: %s\n", out_filename);
 
     stbi_image_free(input_img);
     free(gray);
     free(output_gray);
-    free(final_rgb);
+
 
     return 0;
 }
