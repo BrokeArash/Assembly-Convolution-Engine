@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
         } else {
             database[i].v_density = -1; 
             database[i].h_density = -1;
-            printf("   - picture %d can't br trained", i);
+            printf("   - picture %d can't be trained", i);
         }
         
         if (i % 10 == 0) printf("   - Learned from %d images...\n", i);
