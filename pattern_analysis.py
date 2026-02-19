@@ -239,7 +239,7 @@ class PatternAnalyzer:
         # ============================================================
         # Plot 1: Top 10 Similar Images (Bar Chart)
         # ============================================================
-        ax1 = plt.subplot(3, 4, 1)
+        ax1 = plt.subplot(3, 3, 1)
         top_10 = self.results[:10]
         colors = ['#2ecc71' if r['label'] == 0 else '#3498db' for r in top_10]
         
@@ -262,7 +262,7 @@ class PatternAnalyzer:
         # ============================================================
         # Plot 2: Feature Space Scatter Plot
         # ============================================================
-        ax2 = plt.subplot(3, 4, 2)
+        ax2 = plt.subplot(3, 3, 2)
         
         # Plot all database images
         v_verts = [r['v_density'] for r in vertical_results]
@@ -293,79 +293,9 @@ class PatternAnalyzer:
         ax2.grid(alpha=0.3)
         
         # ============================================================
-        # Plot 3: Distance Distribution
-        # ============================================================
-        ax3 = plt.subplot(3, 4, 3)
-        
-        distances_v = [r['distance'] for r in vertical_results]
-        distances_h = [r['distance'] for r in horizontal_results]
-        
-        ax3.hist(distances_v, bins=20, alpha=0.6, color='#2ecc71', 
-                label='Vertical', edgecolor='black')
-        ax3.hist(distances_h, bins=20, alpha=0.6, color='#3498db',
-                label='Horizontal', edgecolor='black')
-        
-        ax3.axvline(self.results[0]['distance'], color='red', linestyle='--',
-                   linewidth=2, label=f'Best Match: {self.results[0]["distance"]:.2f}')
-        
-        ax3.set_xlabel('Distance', fontweight='bold')
-        ax3.set_ylabel('Frequency', fontweight='bold')
-        ax3.set_title('Distance Distribution', fontweight='bold', fontsize=12)
-        ax3.legend(fontsize=9)
-        ax3.grid(axis='y', alpha=0.3)
-        
-        # ============================================================
-        # Plot 4: Similarity Score Distribution
-        # ============================================================
-        ax4 = plt.subplot(3, 4, 4)
-        
-        similarity_scores = [r['similarity_score'] for r in self.results]
-        ax4.boxplot([similarity_scores], vert=True, patch_artist=True,
-                   boxprops=dict(facecolor='#9b59b6', alpha=0.7),
-                   medianprops=dict(color='red', linewidth=2))
-        
-        ax4.set_ylabel('Similarity Score (%)', fontweight='bold')
-        ax4.set_title('Similarity Score Distribution', fontweight='bold', fontsize=12)
-        ax4.set_xticklabels(['All Matches'])
-        ax4.grid(axis='y', alpha=0.3)
-        
-        # Add statistics
-        mean_sim = np.mean(similarity_scores)
-        median_sim = np.median(similarity_scores)
-        ax4.text(1.15, mean_sim, f'Mean: {mean_sim:.1f}%', 
-                fontsize=9, va='center')
-        ax4.text(1.15, median_sim, f'Median: {median_sim:.1f}%',
-                fontsize=9, va='center')
-        
-        # ============================================================
-        # Plot 5: Ranking Chart
-        # ============================================================
-        ax5 = plt.subplot(3, 4, 5)
-        
-        ranks = [r['rank'] for r in self.results]
-        distances = [r['distance'] for r in self.results]
-        colors_rank = ['#2ecc71' if r['label'] == 0 else '#3498db' for r in self.results]
-        
-        ax5.scatter(ranks, distances, c=colors_rank, alpha=0.6, s=30)
-        ax5.plot(ranks, distances, 'gray', alpha=0.3, linewidth=1)
-        
-        ax5.set_xlabel('Rank', fontweight='bold')
-        ax5.set_ylabel('Distance', fontweight='bold')
-        ax5.set_title('Rank vs Distance', fontweight='bold', fontsize=12)
-        ax5.grid(alpha=0.3)
-        
-        # Highlight top 10
-        top_10_ranks = ranks[:10]
-        top_10_dist = distances[:10]
-        ax5.scatter(top_10_ranks, top_10_dist, c='red', s=80, 
-                   marker='o', edgecolors='black', linewidth=1.5,
-                   label='Top 10', zorder=5)
-        ax5.legend(fontsize=9)
-        
-        # ============================================================
         # Plot 6: Pattern Type Comparison (CLASSIFICATION DECISION)
         # ============================================================
-        ax6 = plt.subplot(3, 4, 6)
+        ax6 = plt.subplot(3, 3, 3)
         
         avg_dist_v = np.mean([r['distance'] for r in vertical_results])
         avg_dist_h = np.mean([r['distance'] for r in horizontal_results])
@@ -417,7 +347,7 @@ class PatternAnalyzer:
         # ============================================================
         # Plot 7: Input Image
         # ============================================================
-        ax7 = plt.subplot(3, 4, 7)
+        ax7 = plt.subplot(3, 3, 4)
         
         try:
             input_img = Image.open(input_path)
@@ -432,7 +362,7 @@ class PatternAnalyzer:
         # ============================================================
         # Plot 8: Best Match Image
         # ============================================================
-        ax8 = plt.subplot(3, 4, 8)
+        ax8 = plt.subplot(3, 3, 5)
         
         best_match_path = self.results[0]['filepath']
         try:
@@ -450,9 +380,9 @@ class PatternAnalyzer:
         # ============================================================
         # Plot 9-11: Top 3 Additional Matches (Small Grid)
         # ============================================================
-        match_positions = [9, 10, 11]  # Bottom row positions
+        match_positions = [6, 7, 8]  # Bottom row positions
         for plot_idx, pos in enumerate(match_positions):
-            ax = plt.subplot(3, 4, pos)
+            ax = plt.subplot(3, 3, pos)
             
             result_idx = plot_idx + 1  # Skip best match (already shown in plot 8)
             if result_idx < len(self.results):
@@ -474,7 +404,7 @@ class PatternAnalyzer:
         # ============================================================
         # Plot 12: Summary Table
         # ============================================================
-        ax12 = plt.subplot(3, 4, 12)
+        ax12 = plt.subplot(3, 3, 9)
         ax12.axis('off')
         
         # Calculate classification based on average distance
