@@ -46,12 +46,11 @@ int main() {
         b_in[i] = input_image[i * 3 + 2];
     }
 
-    //float kernel[9] = {0, -1, 0, -1, 5, -1, 0, -1, 0}; // Sharpen Filter
     float kernel[9] = {
         -1.0f, -1.0f, -1.0f,
         -1.0f,  8.0f, -1.0f,
         -1.0f, -1.0f, -1.0f
-    }; //edge detection
+    };
     
     FILE* fp = fopen("plot/benchmark_results.csv", "w");
     fprintf(fp, "iterations,c_time,asm_time,speedup\n");
