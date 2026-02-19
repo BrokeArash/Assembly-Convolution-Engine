@@ -15,6 +15,9 @@
 #include "cnn_weights/c_arrays/fc2_weight.h"
 #include "cnn_weights/c_arrays/fc2_bias.h"
 
+extern void fast_convolution(uint8_t *in, uint8_t *out, int w, int h, float* kernel);
+extern void fast_maxpool(uint8_t *in, uint8_t *out, int w, int h);
+
 void conv2d(const float*, const float*, const float*, float*, int, int, int, int, int);
 void relu(float*, int);
 void maxpool2x2(const float*, float*, int, int, int);
@@ -33,58 +36,76 @@ int main(int argc, char **argv) {
     }
 
     int w, h, c;
-    unsigned char *img_u8 = stbi_load(argv[1], &w, &h, &c, 1);
-    if (!img_u8) {
+    uint8_t *img = stbi_load(argv[1], &w, &h, &c, 1);
+    if (!img) {
         printf("Failed to load image\n");
         return 1;
     }
 
     if (w != 128 || h != 128) { //بررسی سایز عکس
-        printf("❌ Image must be 128x128 (got %dx%d)\n", w, h);
-        stbi_image_free(img_u8);
+        printf("Image must be 128x128 (got %dx%d)\n", w, h);
+        stbi_image_free(img);
         return 1;
     }
 
-    float input_image[128 * 128];
-    for (int i = 0; i < 128 * 128; i++)
-        input_image[i] = img_u8[i] / 255.0f;
+    //شروع پردازش تصویر با شبکه عصبی
 
-    stbi_image_free(img_u8);
+    static uint8_t conv1_out_u8[8][128 * 128];
+    for (int oc = 0; oc < 8; oc++) {
+        fast_convolution(
+            img,
+            conv1_out_u8[oc],
+            128, 128,
+            (float *)(conv1_weight + oc * 9)
+        );
+        for (int i = 0; i < 128 * 128; i++) {
+            float v = conv1_out_u8[oc][i] / 255.0f + conv1_bias[oc];
+            conv1_out_u8[oc][i] = (uint8_t)(relu1(v) * 255.0f);
+        }
+    }
+    stbi_image_free(img);
+     static uint8_t pool1[8][64 * 64];
+    for (int c = 0; c < 8; c++)
+        fast_maxpool(conv1_out_u8[c], pool1[c], 128, 128);
+    static uint8_t conv2_out_u8[16][64 * 64];
+    for (int oc = 0; oc < 16; oc++) {
+        memset(conv2_out_u8[oc], 0, 64 * 64);
 
-    static float x1[8 * 128 * 128];
-    static float p1[8 * 64 * 64];
+        for (int ic = 0; ic < 8; ic++) {
+            fast_convolution(
+                pool1[ic],
+                conv2_out_u8[oc],
+                64, 64,
+                (float *)(conv2_weight + oc * 8 * 9 + ic * 9)
+            );
+        }
 
-    static float x2[16 * 64 * 64];
-    static float p2[16 * 32 * 32];
+        for (int i = 0; i < 64 * 64; i++) {
+            float v = conv2_out_u8[oc][i] / 255.0f + conv2_bias[oc];
+            conv2_out_u8[oc][i] = (uint8_t)(relu1(v) * 255.0f);
+        }
+    }
+     static uint8_t pool2[16][32 * 32];
+    for (int c = 0; c < 16; c++)
+        fast_maxpool(conv2_out_u8[c], pool2[c], 64, 64);
+
+    static float flat[16 * 32 * 32];
+    int idx = 0;
+    for (int c = 0; c < 16; c++)
+        for (int i = 0; i < 32 * 32; i++)
+            flat[idx++] = pool2[c][i] / 255.0f;
 
     static float fc1_out[64];
+    for (int i = 0; i < 64; i++)
+        fc1_out[i] = relu1(fc(flat, fc1_weight + i * (16 * 32 * 32),
+                             fc1_bias + i, 16 * 32 * 32));
 
-    conv2d(input_image, conv1_weight, conv1_bias,
-           x1, 1, 8, 128, 128, 3);
-    relu(x1, 8 * 128 * 128);
-    maxpool2x2(x1, p1, 8, 128, 128);
 
-    conv2d(p1, conv2_weight, conv2_bias,
-           x2, 8, 16, 64, 64, 3);
-    relu(x2, 16 * 64 * 64);
-    maxpool2x2(x2, p2, 16, 64, 64);
-
-    /* ---------- FC1 ---------- */
-    for (int i = 0; i < 64; i++) {
-        fc1_out[i] = relu1(
-            fc(p2,
-               fc1_weight + i * (16 * 32 * 32),
-               fc1_bias + i,
-               16 * 32 * 32)
-        );
-    }
-
-    /* ---------- FC2 ---------- */
     float logit = fc(fc1_out, fc2_weight, fc2_bias, 64);
-    int percentage = (int)(sigmoid(logit) * 100);
-    printf("Logit score: %.3f\n", logit);
+    float prob = sigmoid(logit) * 100;
+    printf("Probability: %.3f\n", prob);
 
-    if (percentage > 25)
+    if (prob > 30)
         printf("Diagnosis: TUMOR DETECTED!!!\n");
     else
         printf("Diagnosis: NO TUMOR\n");
