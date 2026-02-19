@@ -81,7 +81,6 @@ for epoch in range(98):
 
     print(f"Image {epoch+1} | Loss: {loss.item():.4f}")
 
-# ---------------- Save model ----------------
 os.makedirs("cnn_weights", exist_ok=True)
 torch.save(model.state_dict(), "cnn_weights/cnn.pth")
 
