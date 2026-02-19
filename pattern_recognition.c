@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
     int loaded_count = 0;
     for (int i = 0; i < DATASET_SIZE; i++) { //لود کردن عکس ها در استراکت
         char filename[64];
-        sprintf(filename, "dataset/test_%d.jpg", i);
+        sprintf(filename, "dataset/hv/test_%d.jpg", i);
 
         int w, h, c;
         uint8_t* img = stbi_load(filename, &w, &h, &c, 3);

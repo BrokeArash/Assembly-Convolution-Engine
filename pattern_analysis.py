@@ -20,7 +20,7 @@ plt.rcParams['figure.figsize'] = (16, 10)
 class PatternAnalyzer:
     """Analyzes pattern recognition results and creates visualizations"""
     
-    def __init__(self, dataset_path='dataset', output_path='images'):
+    def __init__(self, dataset_path='dataset/hv', output_path='images'):
         self.dataset_path = dataset_path
         self.output_path = output_path
         self.dataset_size = 100
@@ -579,14 +579,14 @@ def main():
         os.system("pip install scipy")
     
     # Initialize analyzer
-    analyzer = PatternAnalyzer(dataset_path='dataset', output_path='images')
+    analyzer = PatternAnalyzer(dataset_path='dataset/hv', output_path='images')
     
     # Load dataset
     database = analyzer.load_dataset_features()
     
     if not database:
-        print("✗ Error: No images found in dataset/ folder")
-        print("Please ensure you have dataset images: dataset/test_0.jpg, test_1.jpg, etc.")
+        print("✗ Error: No images found in dataset/hv/ folder")
+        print("Please ensure you have dataset images: dataset/hv/test_0.jpg, test_1.jpg, etc.")
         return
     
     # Calculate similarities
