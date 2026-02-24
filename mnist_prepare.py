@@ -25,7 +25,6 @@ def load_dataset():
         d = pickle.load(f)
     images = d["data"]
     labels = d["labels"].flatten().astype(np.uint8)
-    print(f"{len(images)} samples")
     return images, labels
 
 

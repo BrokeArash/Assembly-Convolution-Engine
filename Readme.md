@@ -13,7 +13,7 @@ A comprehensive computer vision system demonstrating the power of low-level opti
 ## 🚀 Key Features
 
 - **⚡ 5-6x Performance Boost**: SIMD-optimized convolution outperforms pure C implementation
-- **🎯 Real-time Pattern Recognition**: Edge-based classification system
+- **🎯 Real-time Pattern Recognition**: Mnist number recognition
 - **🧠 Medical AI**: CNN for brain tumor detection in MRI scans
 - **📊 Comprehensive Benchmarking**: Detailed performance analysis and visualization
 - **🔧 Production-Ready**: Clean, documented, and maintainable assembly code
@@ -30,9 +30,9 @@ Assembly-Convolution-Engine/
 │   └── visualize_benchmark.py   # Performance graphs
 │
 ├── Part 2: Pattern Recognition System
-│   ├── pattern_recognition.c    # Average distance classifier
-│   ├── pattern_analysis.py      # Similarity analysis & visualization
-│   └── dataset/                 # Training images (100+)
+│   ├── mnist_detection.c        # Main number detection
+│   ├── mnist_prepare.py         # Training dataset & creating test input
+│   └── dataset/qmnist           # Training images (120000)
 │
 ├── Part 3: Medical Image Analysis
 │   ├── train_cnn.py             # CNN architecture & training
@@ -73,7 +73,7 @@ Assembly-Convolution-Engine/
 ### Pattern Recognition
 - **Classification Accuracy**: 95.2%
 - **Processing Speed**: 9ms per image
-- **Dataset Size**: 100+ training samples
+- **Dataset Size**: 120000 training samples
 
 ### CNN Tumor Detection
 - **Accuracy**: 94.7% on test set
@@ -132,45 +132,26 @@ addps xmm13, xmm9
 ## 🔍 Part 2: Pattern Recognition System
 
 ### Overview
-Edge-based pattern classifier using **normalized cross-correlation** and **average distance classification**.
+Qmnist number recognition using **normalized cross-correlation**.
 
 ### Features
-- **Feature Extraction**: Sobel edge detection for V/H density calculation
-- **Average Distance Classifier**: More robust than k-NN (k=1)
-- **Visual Analysis**: 9-plot dashboard with similarity rankings
+- **Feature Extraction**: Convolution and other functions
+- **Visual Analysis**: Output image making borders arounf numbers and detect them
 - **Real-time Processing**: <10ms classification time
 
 ### Usage
 
 ```bash
+# Train Dataset and create input image
+python3 mnist_prepare.py 150  #150 image per digit
+
 # Compile pattern recognition
-gcc -o pattern pattern_recognition.c convolution.o -lm -O2
+gcc -o detect mnist_detection.c convolution.o  -O3 -lm -Iheader -Itemplates/
 
-# Classify image
-./pattern input.jpg
-
-# Analyze results
-python3 pattern_analysis.py input.jpg
-```
-
-### Classification Pipeline
+# Run the detection code
+./detect test_qmnist.jpg templates/
 
 ```
-Input Image
-    ↓
-Grayscale Conversion
-    ↓
-Sobel Filters (Assembly)
-    ↓
-Feature Extraction (V-density, H-density)
-    ↓
-Distance Calculation (Euclidean)
-    ↓
-Average Distance Classification
-    ↓
-Pattern: VERTICAL or HORIZONTAL
-```
-
 
 ## 🧠 Part 3: CNN Medical Image Analysis
 
@@ -203,7 +184,7 @@ python3 train_cnn.py
 python3 export_weights.py
 
 # Evaluate
-gcc -o tumor_detection tumor_detection.c cnn.c convolution.o maxpool.o -lm -O2
+gcc -o tumor_detection tumor_detection.c cnn.c convolution.o maxpool.o -lm -O3
 ./tumor_detecion
 ```
 
