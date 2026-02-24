@@ -50,4 +50,4 @@ dump("fc1_bias",   model.fc1.bias)
 dump("fc2_weight", model.fc2.weight)
 dump("fc2_bias",   model.fc2.bias)
 
-print("✅ Weights exported to cnn_weights/c_arrays/")
+print("Weights exported to cnn_weights/c_arrays/")
